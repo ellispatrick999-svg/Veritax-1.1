@@ -1,53 +1,74 @@
-# safety_orchestrator.py
-from safety_profile import SafetyProfile
-from disclaimer_generator import DisclaimerGenerator
-from audit_trail import AuditTrail
-from typing import Dict
+from typing import Dict, Any
+
 
 class SafetyOrchestrator:
-    """
-    Orchestrates all safety subsystem operations: profiles, disclaimers, and audit logging.
-    """
 
     def __init__(self):
-        self.profiles: Dict[str, SafetyProfile] = {}
+        pass
 
-    def create_profile(self, user_id: str, risk_level: str = "low") -> SafetyProfile:
-        """
-        Create and store a new safety profile.
-        """
-        if user_id in self.profiles:
-            raise ValueError(f"Profile for {user_id} already exists.")
-        profile = SafetyProfile(user_id=user_id, risk_level=risk_level)
-        self.profiles[user_id] = profile
-        AuditTrail.log_event(user_id, "profile_created", {"risk_level": risk_level})
-        return profile
+    # 1. INPUT VALIDATION
+    def validate_input(self, financial_profile: Dict[str, Any]) -> Dict[str, Any]:
 
-    def update_profile_risk(self, user_id: str, risk_level: str) -> None:
-        """
-        Update the risk level of a profile.
-        """
-        profile = self.profiles.get(user_id)
-        if not profile:
-            raise ValueError(f"No profile found for {user_id}")
-        profile.update_risk_level(risk_level)
-        AuditTrail.log_event(user_id, "risk_level_updated", {"new_risk_level": risk_level})
+        errors = []
 
-    def generate_disclaimer(self, user_id: str, custom_text: str = "") -> str:
-        """
-        Generate a disclaimer for a specific user and log it.
-        """
-        if user_id not in self.profiles:
-            raise ValueError(f"No profile found for {user_id}")
-        disclaimer = DisclaimerGenerator.generate(custom_text)
-        AuditTrail.log_event(user_id, "disclaimer_generated", {"disclaimer": disclaimer})
-        return disclaimer
+        if not isinstance(financial_profile, dict):
+            errors.append("Financial profile must be a dictionary.")
 
-    def get_profile(self, user_id: str) -> SafetyProfile:
-        """
-        Retrieve a safety profile by user ID.
-        """
-        profile = self.profiles.get(user_id)
-        if not profile:
-            raise ValueError(f"No profile found for {user_id}")
-        return profile
+        if "income" in financial_profile and financial_profile["income"] < 0:
+            errors.append("Income cannot be negative.")
+
+        if "deductions" in financial_profile:
+            if not isinstance(financial_profile["deductions"], dict):
+                errors.append("Deductions must be a dictionary.")
+
+        return {
+            "valid": len(errors) == 0,
+            "errors": errors
+        }
+
+    # 2. RULE ENFORCEMENT
+    def enforce_rules(self, result: Dict[str, Any]) -> Dict[str, Any]:
+
+        warnings = []
+
+        strategies = result.get("strategies", [])
+
+        for strategy in strategies:
+            if strategy.get("estimated_savings", 0) > 100000:
+                warnings.append("Unusually high savings detected. Review required.")
+
+        return {
+            "safe": True,
+            "warnings": warnings
+        }
+
+    # 3. MAIN ENTRY POINT
+    def process(
+        self,
+        financial_profile: Dict[str, Any],
+        orchestrator
+    ) -> Dict[str, Any]:
+
+        # Step 1: Validate input
+        validation = self.validate_input(financial_profile)
+
+        if not validation["valid"]:
+            return {
+                "status": "error",
+                "source": "safety_orchestrator",
+                "errors": validation["errors"]
+            }
+
+        # Step 2: Run core system
+        result = orchestrator.run_full_analysis(financial_profile)
+
+        # Step 3: Enforce safety rules
+        safety_check = self.enforce_rules(result)
+
+        # Step 4: Return safe output
+        return {
+            "status": "success",
+            "source": "safety_orchestrator",
+            "data": result,
+            "warnings": safety_check["warnings"]
+        }
